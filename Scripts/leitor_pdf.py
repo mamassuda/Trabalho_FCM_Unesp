@@ -4,16 +4,16 @@
 #! Etapa 2 - Scripts para leitura de arquivos PDF
 #! ========================================================
 
-import os
+from pathlib import Path
 import re
 import PyPDF2
 import pandas as pd
 
 def executar_leitura_pdfs():
 
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    PASTA_PDFS = os.path.join(BASE_DIR, "arquivos_auxiliares", "relatorios_futebol_leitor_pdf")
-    PASTA_SAIDA = os.path.join(BASE_DIR, "arquivos_auxiliares", "tabelas_jogadores_leitor_pdf")
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    PASTA_PDFS = BASE_DIR / "arquivos_auxiliares" / "relatorios_futebol_leitor_pdf"
+    PASTA_SAIDA = BASE_DIR / "arquivos_auxiliares" / "tabelas_jogadores_leitor_pdf"
 
     relatorios = [
         "Relatorio_1_FCM.pdf",
@@ -59,7 +59,7 @@ def executar_leitura_pdfs():
     lista_jogadores = []
 
     for nome_arquivo in relatorios:
-        caminho = os.path.join(PASTA_PDFS, nome_arquivo)
+        caminho = PASTA_PDFS / nome_arquivo
         texto = ler_pdf(caminho)
 
         sec_info = pegar_secao(texto, "1. Informações do Jogador", "2. Contexto da Partida")
@@ -95,9 +95,9 @@ def executar_leitura_pdfs():
 
     print(df_jogadores[["Arquivo", "Nome", "Posicao", "Idade", "Clube", "Decisao"]].to_string(index=False))
 
-    os.makedirs(PASTA_SAIDA, exist_ok=True)
+    PASTA_SAIDA.mkdir(parents=True, exist_ok=True)
     df_jogadores.to_csv(
-        os.path.join(PASTA_SAIDA, "tabela_jogadores.csv"),
+        PASTA_SAIDA / "tabela_jogadores.csv",
         index=False,
         sep=";",
         encoding="utf-8-sig",
