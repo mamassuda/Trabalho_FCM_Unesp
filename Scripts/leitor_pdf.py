@@ -15,11 +15,7 @@ def executar_leitura_pdfs():
     PASTA_PDFS = BASE_DIR / "arquivos_auxiliares" / "relatorios_futebol_leitor_pdf"
     PASTA_SAIDA = BASE_DIR / "arquivos_auxiliares" / "tabelas_jogadores_leitor_pdf"
 
-    relatorios = [
-        "Relatorio_1_FCM.pdf",
-        "Relatorio_2_FCM.pdf",
-        "Relatorio_3_FCM.pdf",
-    ]
+    relatorios = [PASTA_PDFS / f for f in PASTA_PDFS.glob("*.pdf") if f.is_file()]
 
 
     def ler_pdf(caminho_pdf):
