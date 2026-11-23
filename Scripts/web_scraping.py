@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 
 def executar_scraping():
-
+    BASE_DIR = Path(__file__).resolve().parent.parent
 
     # Se tiver o Google Chrome instalado, deixe True (o Google detecta menos).
     # Se der erro dizendo que o Chrome não foi encontrado, troque para False.
@@ -112,7 +112,7 @@ def executar_scraping():
         url = f"https://www.google.com/search?q={quote_plus(busca)}"
 
         launch_kwargs = dict(
-            user_data_dir="./perfil_chrome",
+            user_data_dir=str(BASE_DIR / "perfil_chrome"),
             headless=False,
             locale="pt-BR",
             viewport={"width": 1280, "height": 900},
@@ -251,7 +251,7 @@ def executar_scraping():
 
 
 
-    pasta_saida = Path("arquivos_auxiliares/tabelas_web_scraping")
+    pasta_saida = BASE_DIR / "arquivos_auxiliares" / "tabelas_web_scraping"
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
     # Série A:

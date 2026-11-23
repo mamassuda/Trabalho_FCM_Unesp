@@ -1,14 +1,6 @@
-
-#! =========================================================================
-#! Etapa final: Criação do DashBoard com streamlit
-#! =========================================================================
-
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
-
-#! Importando funções dos outros scripts
 
 from web_scraping import executar_scraping
 from leitor_pdf import executar_leitura_pdfs
@@ -24,13 +16,13 @@ st.title("Dashboard Integrado: Classificação & Scouting")
 # --- BARRA LATERAL: PIPELINE DE COLETA ---
 st.sidebar.header("Pipeline de Coleta")
 
-if st.sidebar.button("1. Rodar Web Scraping (Classificação)", use_container_width=True):
+if st.sidebar.button("1. Rodar Web Scraping (Classificação)", width="stretch"):
     with st.spinner("Coletando classificações no navegador..."):
         executar_scraping()
     st.cache_data.clear()
     st.sidebar.success("Classificações atualizadas!")
 
-if st.sidebar.button("2. Processar PDFs (Jogadores)", use_container_width=True):
+if st.sidebar.button("2. Processar PDFs (Jogadores)", width="stretch"):
     with st.spinner("Extraindo dados dos relatórios PDF..."):
         executar_leitura_pdfs()
     st.cache_data.clear()
@@ -84,7 +76,7 @@ with aba1:
     st.pyplot(fig)
     plt.close(fig)
 
-    st.dataframe(df_clas_filtrado, use_container_width=True, hide_index=True)
+    st.dataframe(df_clas_filtrado, width="stretch", hide_index=True)
 
 with aba2:
     st.subheader("Comparativo dos Pilares de Avaliação (Notas 1 a 5)")
@@ -112,9 +104,9 @@ with aba2:
     plt.close(fig_jog)
 
     st.subheader("Fichas Extraídas")
-    st.dataframe(df_jog, use_container_width=True, hide_index=True)
+    st.dataframe(df_jog, width="stretch", hide_index=True)
 
 with aba3:
     st.subheader(f"Contexto Competitivo dos Clubes Monitorados ({ano_sel})")
     df_cruzado = cruzar_jogadores_clubes(df_jog, df_clas, ano_sel)
-    st.dataframe(df_cruzado, use_container_width=True, hide_index=True)
+    st.dataframe(df_cruzado, width="stretch", hide_index=True)

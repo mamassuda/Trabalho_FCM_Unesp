@@ -1,3 +1,4 @@
 perfil_chrome/
-debug_*.png
+.venv/
 __pycache__/
+debug_bloqueio.png
