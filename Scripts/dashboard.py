@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 
+from painel_financeiro import renderizar_analise_financeira
 from web_scraping import executar_scraping
 from leitor_pdf import executar_leitura_pdfs
 from tratamento_dados import (
@@ -10,8 +11,9 @@ from tratamento_dados import (
     cruzar_jogadores_clubes,
 )
 
-st.set_page_config(page_title="Scouting & Classificação - FCM Unesp", layout="wide")
-st.title("Dashboard Integrado: Classificação & Scouting")
+st.set_page_config(page_title="FCM Unesp — Gastos, Classificação & Scouting", layout="wide")
+st.title("Dashboard Integrado: Futebol & Análise de Dados")
+st.caption("Classificação, scouting e análise descritiva de gastos e desempenho na Série A")
 
 # --- BARRA LATERAL: PIPELINE DE COLETA ---
 st.sidebar.header("Pipeline de Coleta")
@@ -44,7 +46,8 @@ if df_jog.empty or df_clas.empty:
     st.stop()
 
 # --- FILTROS ---
-st.sidebar.header("Filtros da Análise")
+st.sidebar.header("Filtros de classificação e análise cruzada")
+st.sidebar.caption("A análise financeira tem filtros próprios dentro da sua aba.")
 serie_sel = st.sidebar.selectbox("Série (Aba Classificação)", sorted(df_clas["Serie"].unique()))
 ano_sel = st.sidebar.selectbox("Temporada (Ano)", sorted(df_clas["Ano"].unique(), reverse=True))
 
@@ -53,11 +56,15 @@ df_clas_filtrado = df_clas[
 ].sort_values("Pos")
 
 # --- ABAS ---
-aba1, aba2, aba3 = st.tabs([
+aba_financeira, aba1, aba2, aba3 = st.tabs([
+    "Gastos × desempenho (Série A)",
     "Classificação (Web Scraping)",
     "Relatórios de Scouting (Leitor de PDFs)",
     "Análise Cruzada (Clube x Jogador)",
 ])
+
+with aba_financeira:
+    renderizar_analise_financeira()
 
 with aba1:
     lider = df_clas_filtrado.iloc[0]

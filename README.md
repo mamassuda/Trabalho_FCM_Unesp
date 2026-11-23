@@ -42,3 +42,15 @@ playwright install chromium
 ```bash
 streamlit run Scripts/dashboard.py
 ```
+
+## Análise descritiva de gastos e desempenho
+
+A aba **Gastos × desempenho (Série A)** acrescenta a análise de 2023, 2024 e 2025, com gráficos de gastos, pontos, quadrantes, indicador de pontos por unidade de gasto e comparação entre temporadas. Os filtros por clube/posição do scouting e as demais abas continuam disponíveis.
+
+As bases de custos do futebol e despesas operacionais EY ficam separadas, com fonte, página e ressalvas em **Dados e método**. A tabela financeira já está incluída no repositório; não é preciso rodar nova coleta para abrir a análise. A documentação detalhada está em `ANALISE_DESCRITIVA.md`.
+
+Para executar os testes:
+
+```bash
+python -m unittest discover -s tests -v
+```
