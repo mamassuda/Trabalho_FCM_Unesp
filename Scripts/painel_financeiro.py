@@ -1,4 +1,3 @@
-"""Painel descritivo em pandas/Matplotlib com dados financeiros rastreáveis."""
 from io import BytesIO
 
 import matplotlib.pyplot as plt

@@ -1,4 +1,3 @@
-"""Figuras Matplotlib independentes; o chamador é responsável por fechá-las."""
 import matplotlib.pyplot as plt
 
 

@@ -1,14 +1,3 @@
-"""FCM Unesp — adaptação do exercício Pokémon para gastos e pontos no futebol.
-
-Execute na raiz do projeto, com o ambiente virtual ativado:
-    python Scripts/atividade_aula_futebol.py --ano 2025
-    python Scripts/atividade_aula_futebol.py --ano 2023 --base operacional_EY
-
-O roteiro usa os mesmos pandas/Matplotlib da aula. As funções de gráficos apenas
-organizam títulos, rótulos e quadrantes; não há regressão ou modelo preditivo.
-Custos do futebol e despesas operacionais são bases separadas. Leia as fontes
-no CSV exportado, especialmente para rubricas e versões com ressalvas.
-"""
 import argparse
 from pathlib import Path
 

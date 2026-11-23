@@ -1,8 +1,3 @@
-"""Base financeira da prévia FCM: seleção explícita, cruzamento e análise descritiva.
-
-Não coleta dados nem estima valores ausentes. A tabela da planilha original (EY)
-é preservada separadamente dos custos de futebol publicados por outras fontes.
-"""
 from pathlib import Path
 
 import pandas as pd
