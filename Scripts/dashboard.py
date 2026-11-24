@@ -1,8 +1,16 @@
+#! =========================================================================
+#! DASHBOARD INTEGRADO: Classificação & Scouting — FCM Unesp
+#! =========================================================================
+
+import os
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
-from painel_financeiro import renderizar_analise_financeira
 from web_scraping import executar_scraping
 from leitor_pdf import executar_leitura_pdfs
 from tratamento_dados import (
@@ -10,212 +18,339 @@ from tratamento_dados import (
     carregar_e_tratar_jogadores,
     cruzar_jogadores_clubes,
 )
+from auth import check_login, logout_button
+from player_cards import render_player_grid
 
-st.set_page_config(page_title="FCM Unesp — Gastos, Classificação & Scouting", layout="wide")
-st.title("Dashboard Integrado: Futebol & Análise de Dados")
-st.caption("Classificação, scouting e análise descritiva de gastos e desempenho na Série A")
+#! --- Configuração da página ---
+st.set_page_config(
+    page_title="Scouting & Classificação - FCM Unesp",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# --- BARRA LATERAL: PIPELINE DE COLETA ---
-st.sidebar.header("Pipeline de Coleta")
+#! --- AUTENTICAÇÃO ---
+if not check_login():
+    st.stop()
 
-if st.sidebar.button("1. Rodar Web Scraping (Classificação)", width="stretch"):
-    with st.spinner("Coletando classificações no navegador..."):
-        executar_scraping()
-    st.cache_data.clear()
-    st.sidebar.success("Classificações atualizadas!")
+st.title("📊 Dashboard Integrado: Classificação & Scouting")
+st.caption("FCM Unesp — Análise de desempenho e scouting de jogadores")
 
-if st.sidebar.button("2. Processar PDFs (Jogadores)", width="stretch"):
-    with st.spinner("Extraindo dados dos relatórios PDF..."):
-        executar_leitura_pdfs()
-    st.cache_data.clear()
-    st.sidebar.success("Tabela de jogadores atualizada!")
+# Caminhos
+CSV_CLASSIF = "classificacoes.csv"
+CSV_JOGADORES = "jogadores.csv"
+CSV_DENSIDADE = "densidade_regional.csv"
+CSV_FOTOS = "fotos.csv"
+IMG_MAPAS = "Mapas_Regionais_Brasileirao.png"
+
+#! --- Pipeline (sidebar) ---
+st.sidebar.header("⚙️ Pipeline de Coleta")
+
+if st.sidebar.button("1. Rodar Web Scraping", use_container_width=True):
+    try:
+        with st.spinner("Coletando classificações..."):
+            executar_scraping()
+        st.cache_data.clear()
+        st.sidebar.success("✅ Classificações atualizadas!")
+    except Exception as e:
+        st.sidebar.error(f"❌ Falha no scraping: {e}")
+
+if st.sidebar.button("2. Processar PDFs", use_container_width=True):
+    try:
+        with st.spinner("Extraindo dados dos PDFs..."):
+            executar_leitura_pdfs()
+        st.cache_data.clear()
+        st.sidebar.success("✅ Jogadores atualizados!")
+    except Exception as e:
+        st.sidebar.error(f"❌ Falha na leitura de PDFs: {e}")
 
 st.sidebar.divider()
 
+#! --- Cache helpers ---
+def _mtime(*paths):
+    return tuple(os.path.getmtime(p) if os.path.exists(p) else 0 for p in paths)
 
-# --- LEITURA COM CACHE ---
-@st.cache_data
-def obter_dados():
+@st.cache_data(show_spinner=False)
+def obter_dados(_stamp):
     return carregar_e_tratar_jogadores(), carregar_e_tratar_classificacoes()
 
+@st.cache_data(show_spinner=False)
+def obter_densidade(_stamp):
+    if not os.path.exists(CSV_DENSIDADE):
+        return pd.DataFrame()
+    return pd.read_csv(CSV_DENSIDADE)
 
-df_jog, df_clas = obter_dados()
+@st.cache_data(show_spinner=False)
+def obter_fotos(_stamp):
+    if not os.path.exists(CSV_FOTOS):
+        return {}
+    df_f = pd.read_csv(CSV_FOTOS)
+    return dict(zip(df_f["Nome"], df_f["URL"]))
+
+df_jog, df_clas = obter_dados(_mtime(CSV_JOGADORES, CSV_CLASSIF))
 
 if df_jog.empty or df_clas.empty:
-    st.warning("Arquivos CSV não encontrados. Use os botões na barra lateral para gerar os dados.")
+    st.warning(
+        "⚠️ CSVs não encontrados. Use os botões na barra lateral "
+        "para gerar os dados."
+    )
     st.stop()
 
-# --- FILTROS ---
-st.sidebar.header("Filtros de classificação e análise cruzada")
-st.sidebar.caption("A análise financeira tem filtros próprios dentro da sua aba.")
-serie_sel = st.sidebar.selectbox("Série (Aba Classificação)", sorted(df_clas["Serie"].unique()))
-ano_sel = st.sidebar.selectbox("Temporada (Ano)", sorted(df_clas["Ano"].unique(), reverse=True))
+foto_map = obter_fotos(_mtime(CSV_FOTOS))
 
-df_clas_filtrado = df_clas[
-    (df_clas["Serie"] == serie_sel) & (df_clas["Ano"] == ano_sel)
-].sort_values("Pos")
+#! --- Filtros globais ---
+st.sidebar.header("🔎 Filtros")
+serie_sel = st.sidebar.selectbox(
+    "Série", sorted(df_clas["Serie"].unique())
+)
+ano_sel = st.sidebar.selectbox(
+    "Temporada", sorted(df_clas["Ano"].unique(), reverse=True)
+)
 
-# --- ABAS ---
-aba_financeira, aba1, aba_historica, aba2, aba3 = st.tabs([
-    "Gastos × desempenho (Série A)",
-    "Classificação (Web Scraping)",
-    "Evolução Histórica (2023–2026)",
-    "Relatórios de Scouting (Leitor de PDFs)",
-    "Análise Cruzada (Clube x Jogador)",
+df_clas_filtrado = (
+    df_clas[(df_clas["Serie"] == serie_sel) & (df_clas["Ano"] == ano_sel)]
+    .sort_values("Pos")
+    .reset_index(drop=True)
+)
+
+#! --- Abas ---
+aba1, aba2, aba3, aba4, aba5 = st.tabs([
+    "🏆 Classificação",
+    "🔬 Scouting (PDFs)",
+    "🔀 Cruzamento",
+    "🗺️ Regional",
+    "📈 Comparativo",
 ])
 
-with aba_financeira:
-    renderizar_analise_financeira()
-
+# ---------------- ABA 1 ----------------
 with aba1:
+    st.subheader(f"Série {serie_sel} — {ano_sel}")
     lider = df_clas_filtrado.iloc[0]
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Líder", lider["Clube"], f"{lider['Pts']} pts")
-    c2.metric("Média de Gols Pró", f"{df_clas_filtrado['GM'].mean():.1f}")
-    c3.metric("Melhor Saldo", df_clas_filtrado.sort_values("SG", ascending=False).iloc[0]["Clube"])
-    c4.metric("Clubes na Divisão", len(df_clas_filtrado))
+    c2.metric("Média GM", f"{df_clas_filtrado['GM'].mean():.1f}")
+    c3.metric(
+        "Melhor Saldo",
+        df_clas_filtrado.sort_values("SG", ascending=False).iloc[0]["Clube"],
+        int(df_clas_filtrado["SG"].max()),
+    )
+    c4.metric("Clubes", len(df_clas_filtrado))
+
+    c5, c6, c7 = st.columns(3)
+    c5.metric("Média GC", f"{df_clas_filtrado['GC'].mean():.1f}")
+    c6.metric("Total Gols (liga)", int(df_clas_filtrado["GM"].sum()))
+    c7.metric(
+        "Aproveitamento do líder",
+        f"{100 * lider['Pts'] / (lider['PJ'] * 3):.1f}%",
+    )
+
+    st.divider()
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(data=df_clas_filtrado, x="Pts", y="Clube", hue="Zona", dodge=False, ax=ax)
-    ax.set_title(f"Pontuação - Brasileirão Série {serie_sel} ({ano_sel})")
-    ax.set_xlabel("Pontos")
-    ax.set_ylabel("")
+    sns.barplot(
+        data=df_clas_filtrado, x="Pts", y="Clube",
+        hue="Zona", dodge=False, ax=ax,
+    )
+    ax.set_title(f"Pontuação — Série {serie_sel} ({ano_sel})")
+    ax.set_xlabel("Pontos"); ax.set_ylabel("")
     ax.legend(title="Zona", bbox_to_anchor=(1.02, 1), loc="upper left")
-    st.pyplot(fig)
-    plt.close(fig)
+    st.pyplot(fig); plt.close(fig)
 
-    st.dataframe(df_clas_filtrado, width="stretch", hide_index=True)
+    st.dataframe(df_clas_filtrado, use_container_width=True, hide_index=True)
 
-with aba_historica:
-    st.subheader(f"Evolução Histórica de Desempenho — Série {serie_sel} (2023–2026)")
-    st.caption("Acompanhe a trajetória dos clubes ao longo das temporadas. Use o filtro de Série na barra lateral para alternar entre A, B e C.")
-
-    df_hist = df_clas[df_clas["Serie"] == serie_sel].copy()
-    df_hist["Ano"] = df_hist["Ano"].astype(int)
-
-    clubes_disponiveis = sorted(df_hist["Clube"].unique())
-    padrao_clubes = [c for c in ["Flamengo", "Palmeiras", "Botafogo", "São Paulo", "Fortaleza"] if c in clubes_disponiveis]
-    if not padrao_clubes:
-        padrao_clubes = clubes_disponiveis[:4]
-
-    col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        clubes_hist_sel = st.multiselect(
-            "Selecione os clubes para comparar:",
-            options=clubes_disponiveis,
-            default=padrao_clubes,
-        )
-    with col_h2:
-        metrica_hist = st.radio(
-            "Métrica do gráfico:",
-            options=["Posição na Tabela", "Pontuação (Pts)"],
-        )
-
-    if not clubes_hist_sel:
-        st.info("Selecione pelo menos um clube acima para visualizar a evolução histórica.")
-    else:
-        df_plot_hist = df_hist[df_hist["Clube"].isin(clubes_hist_sel)].sort_values(["Clube", "Ano"])
-
-        fig_hist, ax_hist = plt.subplots(figsize=(10, 5))
-
-        for clube in clubes_hist_sel:
-            dados_clube = df_plot_hist[df_plot_hist["Clube"] == clube]
-            y_col = "Pos" if metrica_hist == "Posição na Tabela" else "Pts"
-            ax_hist.plot(
-                dados_clube["Ano"],
-                dados_clube[y_col],
-                marker="o",
-                linewidth=2.5,
-                markersize=8,
-                label=clube,
-            )
-            for _, row in dados_clube.iterrows():
-                val = int(row[y_col])
-                sufixo = "º" if metrica_hist == "Posição na Tabela" else " pts"
-                ax_hist.annotate(
-                    f"{val}{sufixo}",
-                    (row["Ano"], row[y_col]),
-                    textcoords="offset points",
-                    xytext=(0, 8),
-                    ha="center",
-                    fontsize=9,
-                    fontweight="bold",
-                )
-
-        anos_unicos = sorted(df_hist["Ano"].unique())
-        ax_hist.set_xticks(anos_unicos)
-        ax_hist.set_xlabel("Temporada")
-
-        if metrica_hist == "Posição na Tabela":
-            ax_hist.invert_yaxis()
-            ax_hist.set_yticks(range(1, 21, 2))
-            ax_hist.set_ylabel("Colocação (1º no topo)")
-            ax_hist.set_title(f"Evolução da Classificação Final — Série {serie_sel} (2023–2026)")
-        else:
-            ax_hist.set_ylabel("Pontos Conquistados")
-            ax_hist.set_title(f"Evolução de Pontos — Série {serie_sel} (2023–2026)")
-
-        ax_hist.grid(True, linestyle="--", alpha=0.4)
-        ax_hist.legend(title="Clube", bbox_to_anchor=(1.02, 1), loc="upper left")
-        plt.tight_layout()
-        st.pyplot(fig_hist)
-        plt.close(fig_hist)
-
-        st.subheader("Resumo Comparativo por Temporada")
-        col_pivot = "Pos" if metrica_hist == "Posição na Tabela" else "Pts"
-        tabela_pivot = df_plot_hist.pivot(index="Clube", columns="Ano", values=col_pivot)
-        st.dataframe(tabela_pivot, width="stretch")
-
+# ---------------- ABA 2 ----------------
 with aba2:
-    st.subheader("Comparativo dos Pilares de Avaliação (Notas 1 a 5)")
+    st.subheader("Scouting — Comparativo de Pilares")
 
-    col_filtro1, col_filtro2 = st.columns(2)
-    
-    with col_filtro1:
-        clubes = df_jog["Clube"].unique().tolist()
-        clubes_selecionados = st.multiselect("Filtrar por Clube:", options=clubes, default=clubes)
-        
-    with col_filtro2:
-        posicoes = df_jog["Posicao"].unique().tolist()
-        posicoes_selecionadas = st.multiselect("Filtrar por Posição:", options=posicoes, default=posicoes)
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        pos_sel = st.multiselect(
+            "Posição", sorted(df_jog["Posicao"].dropna().unique()),
+            default=sorted(df_jog["Posicao"].dropna().unique()),
+        )
+    with fc2:
+        dec_sel = st.multiselect(
+            "Decisão", sorted(df_jog["Decisao"].dropna().unique()),
+            default=sorted(df_jog["Decisao"].dropna().unique()),
+        )
 
-    df_filtrado = df_jog[
-        (df_jog["Clube"].isin(clubes_selecionados)) & 
-        (df_jog["Posicao"].isin(posicoes_selecionadas))
+    df_jog_filt = df_jog[
+        df_jog["Posicao"].isin(pos_sel) & df_jog["Decisao"].isin(dec_sel)
     ]
 
-    if df_filtrado.empty:
-        st.warning("Nenhum jogador encontrado com os filtros selecionados.")
-    else:
-        df_notas = df_filtrado.melt(
-            id_vars=["Nome", "Posicao", "Clube", "Decisao"],
-            value_vars=[
-                "Nota_Geral_Tecnica",
-                "Nota_Geral_Tatica",
-                "Nota_Geral_Fisica",
-                "Nota_Geral_Mental",
-            ],
-            var_name="Pilar",
-            value_name="Nota",
+    st.markdown("### 🪪 Player Cards")
+    cols_card = st.radio(
+        "Colunas", [2, 3, 4], horizontal=True, index=1,
+        key="card_cols",
+    )
+    render_player_grid(df_jog_filt, cols=cols_card, foto_map=foto_map)
+
+    st.divider()
+
+    st.markdown("### 🎯 Radar comparativo")
+    pilares_cols = [
+        "Nota_Geral_Tecnica", "Nota_Geral_Tatica",
+        "Nota_Geral_Fisica", "Nota_Geral_Mental",
+    ]
+    labels = ["Técnica", "Tática", "Física", "Mental"]
+
+    nomes_radar = st.multiselect(
+        "Jogadores", sorted(df_jog_filt["Nome"].unique()),
+        default=sorted(df_jog_filt["Nome"].unique())[:min(2, len(df_jog_filt))],
+        key="radar",
+    )
+
+    if nomes_radar:
+        fig_radar = go.Figure()
+        for nome in nomes_radar:
+            row = df_jog_filt[df_jog_filt["Nome"] == nome].iloc[0]
+            vals = [row[c] for c in pilares_cols]
+            fig_radar.add_trace(go.Scatterpolar(
+                r=vals + [vals[0]],
+                theta=labels + [labels[0]],
+                fill="toself", name=nome,
+            ))
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 5])),
+            height=500,
         )
-        df_notas["Pilar"] = df_notas["Pilar"].str.replace("Nota_Geral_", "")
+        st.plotly_chart(fig_radar, use_container_width=True)
 
-        fig_jog, ax_jog = plt.subplots(figsize=(10, 4))
-        sns.barplot(data=df_notas, x="Nome", y="Nota", hue="Pilar", ax=ax_jog)
-        ax_jog.set_ylim(0, 5.5)
-        ax_jog.set_title("Notas por Pilar de Avaliação")
-        ax_jog.set_xlabel("")
-        ax_jog.legend(title="Pilar", bbox_to_anchor=(1.02, 1), loc="upper left")
-        
-        plt.xticks(rotation=45, ha='right')
-        
-        st.pyplot(fig_jog)
-        plt.close(fig_jog)
+    st.divider()
 
-    st.subheader("Fichas Extraídas")
-    st.dataframe(df_filtrado, width="stretch", hide_index=True)
+    st.markdown("### 🔥 Heatmap dos pilares")
+    pivot = df_jog_filt.set_index("Nome")[pilares_cols].sort_index()
+    if not pivot.empty:
+        fig_hm, ax_hm = plt.subplots(
+            figsize=(10, max(3, len(pivot) * 0.35))
+        )
+        sns.heatmap(
+            pivot, annot=True, cmap="RdYlGn", vmin=0, vmax=5,
+            ax=ax_hm, cbar_kws={"label": "Nota"},
+        )
+        ax_hm.set_ylabel("")
+        st.pyplot(fig_hm); plt.close(fig_hm)
 
+    st.divider()
+
+    st.subheader("📋 Tabela completa")
+    st.dataframe(df_jog_filt, use_container_width=True, hide_index=True)
+    st.download_button(
+        "📥 Baixar jogadores filtrados (CSV)",
+        df_jog_filt.to_csv(index=False).encode("utf-8"),
+        file_name="jogadores_filtrados.csv", mime="text/csv",
+    )
+
+# ---------------- ABA 3 ----------------
 with aba3:
-    st.subheader(f"Contexto Competitivo dos Clubes Monitorados ({ano_sel})")
+    st.subheader(f"Cruzamento Clube × Jogador ({ano_sel})")
     df_cruzado = cruzar_jogadores_clubes(df_jog, df_clas, ano_sel)
-    st.dataframe(df_cruzado, width="stretch", hide_index=True)
+    st.dataframe(df_cruzado, use_container_width=True, hide_index=True)
+    st.download_button(
+        "📥 Baixar cruzamento (CSV)",
+        df_cruzado.to_csv(index=False).encode("utf-8"),
+        file_name=f"cruzamento_{ano_sel}.csv", mime="text/csv",
+    )
+
+# ---------------- ABA 4 ----------------
+with aba4:
+    st.subheader("🗺️ Distribuição Regional (2023–2026)")
+    df_dens = obter_densidade(_mtime(CSV_DENSIDADE))
+
+    if df_dens.empty:
+        st.info(
+            "Arquivo `densidade_regional.csv` não encontrado. "
+            "Execute o script R para exportá-lo."
+        )
+    else:
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            fig_reg = px.bar(
+                df_dens, x="Região", y="Equipes",
+                color="Região", animation_frame="Ano", text="Equipes",
+                range_y=[0, df_dens["Equipes"].max() + 3],
+                title="Equipes por região (animação)",
+            )
+            fig_reg.update_traces(textposition="outside")
+            st.plotly_chart(fig_reg, use_container_width=True)
+        with col_b:
+            if os.path.exists(IMG_MAPAS):
+                st.image(IMG_MAPAS, caption="Mapa consolidado (R/geobr)")
+            else:
+                st.caption("PNG dos mapas não encontrado.")
+
+        df_dens_pct = df_dens.copy()
+        df_dens_pct["Percentual"] = (
+            df_dens_pct.groupby("Ano")["Equipes"]
+            .transform(lambda s: 100 * s / s.sum()).round(2)
+        )
+        st.plotly_chart(
+            px.line(
+                df_dens_pct, x="Ano", y="Percentual",
+                color="Região", markers=True,
+                title="Participação percentual por região",
+            ),
+            use_container_width=True,
+        )
+
+        st.dataframe(df_dens, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Baixar densidade (CSV)",
+            df_dens.to_csv(index=False).encode("utf-8"),
+            file_name="densidade_regional.csv", mime="text/csv",
+        )
+
+# ---------------- ABA 5 ----------------
+with aba5:
+    st.subheader("📈 Comparativo entre temporadas")
+    clubes = st.multiselect(
+        "Clubes",
+        sorted(df_clas["Clube"].unique()),
+        default=list(
+            df_clas.sort_values("Pts", ascending=False)["Clube"].unique()[:5]
+        ),
+    )
+    if clubes:
+        df_evol = df_clas[df_clas["Clube"].isin(clubes)].sort_values("Ano")
+        st.plotly_chart(
+            px.line(
+                df_evol, x="Ano", y="Pts", color="Clube",
+                markers=True, title="Pontuação por temporada",
+            ),
+            use_container_width=True,
+        )
+        st.plotly_chart(
+            px.scatter(
+                df_evol, x="GM", y="GC", color="Clube",
+                size="Pts", hover_data=["Ano", "Pos"],
+                title="Ataque vs Defesa (tamanho = pontos)",
+            ),
+            use_container_width=True,
+        )
+        st.dataframe(
+            df_evol[["Clube", "Ano", "Serie", "Pos", "Pts", "GM", "GC", "SG"]],
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.info("Selecione ao menos um clube.")
+
+# ---------------- Sidebar: downloads + logout ----------------
+st.sidebar.divider()
+st.sidebar.header("📥 Exportar")
+st.sidebar.download_button(
+    "Classificação (CSV)",
+    df_clas.to_csv(index=False).encode("utf-8"),
+    file_name="classificacao_completa.csv", mime="text/csv",
+    use_container_width=True,
+)
+st.sidebar.download_button(
+    "Jogadores (CSV)",
+    df_jog.to_csv(index=False).encode("utf-8"),
+    file_name="jogadores_completo.csv", mime="text/csv",
+    use_container_width=True,
+)
+
+logout_button()
+
+st.sidebar.divider()
+st.sidebar.caption("FCM Unesp — Dashboard Integrado (Streamlit)")
