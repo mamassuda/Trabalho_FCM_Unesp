@@ -7,14 +7,17 @@ Pipeline automatizado em Python para coleta de classificações do Campeonato Br
 ```text
 Trabalho_FCM_Unesp/
 ├── Scripts/
-│   ├── web_scraping.py   # Etapa 1: Coleta das tabelas das Séries A, B e C via Playwright
-│   ├── leitor_pdf.py     # Etapa 2: Extração estruturada dos relatórios PDF via PyPDF2/Regex
-│   ├── tratamento.py     # Limpeza, tipagem e cruzamento entre jogadores e clubes
-│   └── dashboard.py      # Etapa 3: Interface interativa e orquestração em Streamlit
+│   ├── web_scraping.py       # Etapa 1: Coleta das tabelas das Séries A, B e C via Playwright
+│   ├── leitor_pdf.py         # Etapa 2: Extração estruturada dos relatórios PDF via PyPDF2/Regex
+│   ├── tratamento.py         # Limpeza, tipagem e cruzamento entre jogadores e clubes
+│   └── dashboard.py          # Etapa 3: Interface interativa e orquestração em Streamlit
 ├── arquivos_auxiliares/
-│   ├── relatorios_futebol_leitor_pdf/
-│   ├── tabelas_jogadores_leitor_pdf/
-│   └── tabelas_web_scraping/
+│   ├── relatorios_futebol_leitor_pdf/   # Laudos de scouting em PDF (Relatorio_1_FCM a Relatorio_15_FCM)
+│   ├── tabelas_jogadores_leitor_pdf/    # Base estruturada dos atletas (tabela_jogadores.csv)
+│   └── tabelas_web_scraping/            # Classificações históricas extraídas (Séries A, B e C)
+├── pesquisa_financeira/      # Bases e análises de gastos anuais da Série A (2023–2025)
+├── tests/                    # Testes automatizados do pipeline
+├── ANALISE_DESCRITIVA.md     # Metodologia e notas da análise financeira
 ├── .gitignore
 ├── requirements.txt
 └── README.md
